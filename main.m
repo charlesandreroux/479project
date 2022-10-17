@@ -8,10 +8,10 @@ if ~exist('N', 'var')
     N = 1024;
 end
 if ~exist('Tl', 'var')
-    Tl = 1.2;
+    Tl = 0.8;
 end
 if ~exist('Tr', 'var')
-    Tr = 0.8;
+    Tr = 1.2;
 end
 if ~exist('lambda', 'var')
     lambda = 0.8;
@@ -39,6 +39,7 @@ if ~exist('save', 'var')
 end
 
 kB = 1.380649e-23;
+nPoints = maxStep/nDataPoints;
 
 % arrays of positions, velocities, and accelerations
 x = zeros(N + 2, 1);
@@ -46,8 +47,8 @@ v = zeros(N + 2, 1);
 a = zeros(N + 2, 1);
 
 % chi terms
-xil0 = sqrt(2.*lambda.*kB.*Tl);
-xir0 = sqrt(2.*lambda.*kB.*Tr);
+xil0 = sqrt(2.*lambda.*kB.*Tl./tstep);
+xir0 = sqrt(2.*lambda.*kB.*Tr./tstep);
 
 % array of masses
 m = 1 - deltaM + (2*deltaM)*rand(N + 2, 1);
@@ -57,8 +58,8 @@ m(N+2) = inf;
 % initial conditions
 %v(2) = sqrt(kB*Tl/m(2));
 %v(N+1) = sqrt(kB*Tr/m(N+2));
-v(2) = Tl;
-v(N+1) = Tr;
+%v(2) = Tl;
+%v(N+1) = Tr;
 
 % pre-allocation
 newa = zeros(N+2,1);
@@ -73,10 +74,15 @@ fcum = zeros(N+2, 1);
 
 j = zeros(nDataPoints,1);
 T = zeros(nDataPoints,1);
+Tl1 = zeros(nDataPoints,1);
+Tr1 = zeros(nDataPoints,1);
+
+tcuml = 0;
+tcumr = 0;
 
 for i = 1:nDataPoints
 
-    for step = 1:maxStep/nDataPoints
+    for step = 1:nPoints
     
         x = x + v.*tstep + 0.5.*a.*tstep.^2;
     
@@ -118,16 +124,23 @@ for i = 1:nDataPoints
         a = newa;
         fcum = fcum + fl.*v;
     
-        
+        tcuml = tcuml + v(2)*v(2);
+        tcumr = tcumr + v(N+1)*v(N+1);
         
     end
 
     m(1) = 0;
     m(N+2) = 0;
-    j(i) = sum(fcum)./(maxStep.*(N-1));
+    j(i) = sum(fcum)./(nPoints.*(N-1));
     T(i) = sum(m.*v.*v)./(kB*N);
     m(1) = Inf;
     m(N+2) = Inf;
+    fcum = zeros(N+2, 1);
+
+    Tl1(i) = m(2).*tcuml./(kB.*nPoints);
+    Tr1(i) = m(N+1).*tcumr./(kB.*nPoints);
+    tcuml = 0;
+    tcumr = 0;
 
 end
 
@@ -154,6 +167,10 @@ plotTitle = "{\Delta}m = " + deltaM + ", {\beta} = " + beta + ", {N} = " + N...
 
 plotT = figure();
 plot(nIterations, T);
+hold on
+plot(nIterations, Tl1);
+plot(nIterations, Tr1);
+hold off
 xlabel('Number of Iterations');
 ylabel('Temperature');
 title(plotTitle);
@@ -165,8 +182,8 @@ ylabel('Heat Current {j}');
 title(plotTitle);
 
 if save
-    saveas(plotT, "figures/temperatureE" + log10(maxStep) + "dm" + deltaM + "v0=T-2"+ ".png");
-    saveas(plotJ, "figures/heatcurrentE" + log10(maxStep) + "dm" + deltaM + "v0=T-2"+".png");
+    saveas(plotT, "figures/temperatureE" + log10(maxStep) + "dm" + deltaM + ".png");
+    saveas(plotJ, "figures/heatcurrentE" + log10(maxStep) + "dm" + deltaM +".png");
 end
 
 
