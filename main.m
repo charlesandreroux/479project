@@ -1,6 +1,6 @@
 
 
-function [dat,j,time] = main(N, Tl, Tr, lambda, k, tstep, deltaM, maxStep, beta, nDataPoints, save)
+function [dat,j,m,time,T, Tl1, Tr1] = main(deltaM, beta, plotl, save, kB)
 
 t = tic();
 
@@ -23,22 +23,27 @@ if ~exist('tstep', 'var')
     tstep = 0.05;
 end
 if ~exist('deltaM', 'var')
-    deltaM = 0.1;
+    deltaM = 0.2;
 end
 if ~exist('maxStep', 'var')
-    maxStep = 1e9;
+    maxStep = 1e6;
 end
 if ~exist('beta', 'var')
     beta = 1;
 end
 if ~exist('nDataPoints', 'var')
-    nDataPoints = 10;
+    nDataPoints = 100;
 end
 if ~exist('save', 'var')
     save = true;
 end
+if ~exist('plotl', 'var')
+    plotl = true;
+end
+if ~exist('kB', 'var')
+    kB = 1.380649e-23;
+end
 
-kB = 1.380649e-23;
 nPoints = maxStep/nDataPoints;
 
 % arrays of positions, velocities, and accelerations
@@ -60,7 +65,6 @@ m(N+2) = inf;
 %v(N+1) = sqrt(kB*Tr/m(N+2));
 %v(2) = Tl;
 %v(N+1) = Tr;
-
 % pre-allocation
 newa = zeros(N+2,1);
 xl = zeros(N+2,1);
@@ -79,6 +83,7 @@ Tr1 = zeros(nDataPoints,1);
 
 tcuml = 0;
 tcumr = 0;
+tcumall = zeros(N,1);
 
 for i = 1:nDataPoints
 
@@ -106,8 +111,8 @@ for i = 1:nDataPoints
     %     cuber = gpuArray(cuber);
     %     v = gpuArray(v);
      
-        fl = k.*xl + beta.*cubel;
-        fstep = fl + k.*(- 2.*x + xr) + beta.*cuber;
+        fl = k.*(xl-x) + beta.*cubel;
+        fstep = fl + k.*(xr - x) + beta.*cuber;
     
         xiL = xil0*randn;
         xiR = xir0*randn;
@@ -126,6 +131,10 @@ for i = 1:nDataPoints
     
         tcuml = tcuml + v(2)*v(2);
         tcumr = tcumr + v(N+1)*v(N+1);
+
+        if i == 20
+            tcumall = tcumall + v(2:N+1).*v(2:N+1);
+        end
         
     end
 
@@ -144,6 +153,8 @@ for i = 1:nDataPoints
 
 end
 
+tcumall = m(2:N+1).*tcumall./(kB.*nPoints);
+
 %disp(fstep);
 %disp(fcum);
 %disp(j);
@@ -154,6 +165,8 @@ dat = [x,v,a];
 
 nIterations = linspace(0, maxStep, nDataPoints);
 
+j = j/kB;
+
 %{
 disp(T)
 disp(m)
@@ -161,29 +174,38 @@ disp(v)
 disp(kB)
 disp(N)
 %}
+if plotl
+    plotTitle = "{\Delta}m = " + deltaM + ", {\beta} = " + beta;
+    
+    plotT = figure();
+    plot(nIterations, T);
+    hold on
+    plot(nIterations, Tl1);
+    plot(nIterations, Tr1);
+    hold off
+    xlabel('Number of Iterations');
+    ylabel('Temperature');
+    title(plotTitle);
+    legend('Average Temperature', 'Left endpoint', 'Right endpoint');
+    
+    
+    plotJ = figure();
+    plot(nIterations, j);
+    xlabel('Number of Iterations');
+    ylabel('Heat Current {j}');
+    title(plotTitle);
 
-plotTitle = "{\Delta}m = " + deltaM + ", {\beta} = " + beta + ", {N} = " + N...
-    + ", {T_l} = " + Tl + ", {T_r} = " + Tr;
-
-plotT = figure();
-plot(nIterations, T);
-hold on
-plot(nIterations, Tl1);
-plot(nIterations, Tr1);
-hold off
-xlabel('Number of Iterations');
-ylabel('Temperature');
-title(plotTitle);
-
-plotJ = figure();
-plot(nIterations, j);
-xlabel('Number of Iterations');
-ylabel('Heat Current {j}');
-title(plotTitle);
+    plotTall = figure();
+    plot(tcumall);
+    xlabel('Index of Mass');
+    ylabel('Temperature');
+    title(plotTitle);
+end
 
 if save
-    saveas(plotT, "figures/temperatureE" + log10(maxStep) + "dm" + deltaM + ".png");
-    saveas(plotJ, "figures/heatcurrentE" + log10(maxStep) + "dm" + deltaM +".png");
+    saveas(plotT, "figures/temperature" + "dm" + deltaM + "beta" + beta + ".png");
+    saveas(plotJ, "figures/heatcurrent" + "dm" + deltaM + "beta" + beta +".png");
+    saveas(plotTall, "figures/alltemp20" + "dm" + deltaM + "beta" + beta +".png");
 end
 
 
